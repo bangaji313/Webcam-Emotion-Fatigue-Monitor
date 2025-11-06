@@ -1,0 +1,12 @@
+# File Kredensial Sensitif
+.env
+
+# Cache dan file sementara Python
+__pycache__/
+*.pyc
+
+# File yang dibuat oleh Flask-Session
+/flask_session/
+
+# File spesifik OS
+.DS_Store
