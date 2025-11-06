@@ -93,7 +93,7 @@ Ikuti langkah-langkah ini untuk menjalankan proyek secara lokal.
 
 ```bash
 # 1. Clone repository ini
-git clone [https://github.com/](https://github.com/)[username-anda]/Webcam-Emotion-Fatigue-Monitor.git
+git clone https://github.com/bangaji313/Webcam-Emotion-Fatigue-Monitor.git
 cd Webcam-Emotion-Fatigue-Monitor
 
 # 2. Buat dan aktifkan environment Anaconda
