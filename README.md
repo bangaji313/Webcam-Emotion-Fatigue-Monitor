@@ -99,7 +99,6 @@ webcam_emotion_fatigue/
 
 ### 2. Setup Lingkungan
 
-```bash
 # 1. Clone repository dan pindah ke branch ini
 git clone [https://github.com/bangaji313/Webcam-Emotion-Fatigue-Monitor.git](https://github.com/bangaji313/Webcam-Emotion-Fatigue-Monitor.git)
 cd Webcam-Emotion-Fatigue-Monitor
@@ -112,7 +111,6 @@ conda activate webcam_health_stable
 # 3. Install semua dependensi
 # (File requirements.txt di branch ini sudah stabil)
 pip install -r requirements.txt
-```
 
 ### 3. Setup Database
 
