@@ -100,7 +100,7 @@ webcam_emotion_fatigue/
 ### 2. Setup Lingkungan
 ```bash
 # 1. Clone repository dan pindah ke branch ini
-git clone [https://github.com/bangaji313/Webcam-Emotion-Fatigue-Monitor.git](https://github.com/bangaji313/Webcam-Emotion-Fatigue-Monitor.git)
+git clone https://github.com/bangaji313/Webcam-Emotion-Fatigue-Monitor.git
 cd Webcam-Emotion-Fatigue-Monitor
 git switch v2.0-dual-system-release
 
