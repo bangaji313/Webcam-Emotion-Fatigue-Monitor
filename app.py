@@ -2,20 +2,26 @@ import os
 import sys
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, get_flashed_messages
 from extensions import db, bcrypt, server_session
-from models import User, DetectionLog
+# Perbarui impor model untuk menyertakan yang baru
+from models import User, DetectionLog, HeartPredictionLog
 from dotenv import load_dotenv
 from functools import wraps
 import io
 import csv
 from flask import make_response
 
-# --- Impor Baru untuk Analisis Gambar ---
+# --- Impor untuk Analisis Webcam ---
 import cv2
 import numpy as np
 import base64
-import io
 from PIL import Image
 from deepface import DeepFace
+
+# --- Impor untuk Prediktor Jantung (BARU) ---
+import joblib
+import json
+import pandas as pd
+from sqlalchemy.sql import text # Diperlukan untuk db.session.execute(text(...))
 
 # --- Penambahan untuk Classifier Mata ---
 # Mencari path tempat data OpenCV disimpan
@@ -30,6 +36,23 @@ if not os.path.exists(haar_model_path):
 
 # Muat classifier mata
 eye_cascade = cv2.CascadeClassifier(haar_model_path)
+
+# ==========================================================
+# --- MEMUAT ARTEFAK MODEL JANTUNG (SKLEARN) ---
+# ==========================================================
+print("Memuat artefak model prediktor jantung...")
+try:
+    heart_model = joblib.load('heart_model.pkl')
+    heart_scaler = joblib.load('heart_scaler.pkl')
+
+    with open('heart_columns.json') as f:
+        heart_columns = json.load(f)
+
+    print("Model prediktor jantung, scaler, dan kolom berhasil dimuat.")
+except FileNotFoundError:
+    print("PERINGATAN: File model jantung (.pkl/.json) tidak ditemukan. Fitur prediktor jantung tidak akan berfungsi.")
+    heart_model = None
+# ----------------------------------------------------------
 
 # 2. Muat variabel lingkungan dari file .env
 load_dotenv()
@@ -261,6 +284,31 @@ def dashboard():
     # Kita akan mengisi ini nanti
     return render_template('dashboard.html', user_nama=session.get('nama'))
 
+@app.route('/heart-predictor')
+@require_login # Lindungi halaman ini juga
+def heart_predictor_page():
+    """Menampilkan halaman formulir prediktor jantung."""
+    # 'session' akan otomatis diambil oleh layout.html
+    return render_template('heart_predictor.html')
+
+@app.route('/admin/heart-logs')
+@require_login
+def admin_heart_logs_page():
+    """Menampilkan halaman admin untuk melihat SEMUA log prediksi jantung."""
+    
+    # 1. Lindungi Rute (Hanya Admin)
+    if session.get('role') != 'admin':
+        flash('Anda tidak memiliki hak akses ke halaman ini.', 'danger')
+        return redirect(url_for('dashboard')) # Lemparkan user biasa
+        
+    # 2. Ambil SEMUA log (mirip 'api_download_csv' versi admin)
+    # Kita 'join' dengan 'User' untuk mendapatkan nama pemilik log
+    logs = db.session.query(HeartPredictionLog, User).join(
+        User, HeartPredictionLog.user_id == User.id
+    ).order_by(HeartPredictionLog.timestamp.desc()).all()
+    
+    return render_template('admin_heart_logs.html', logs=logs)
+
 # =================================================================
 #                         API ENDPOINTS
 # =================================================================
@@ -434,6 +482,110 @@ def api_download_csv():
         print(f"Server Error di /api/download_csv: {e}")
         flash('Gagal membuat file CSV.', 'danger')
         return redirect(url_for('dashboard'))
+
+# HAPUS FUNGSI LAMA @app.route('/api/predict_heart') ...
+# DAN GANTI DENGAN YANG INI:
+
+@app.route('/api/predict_heart', methods=['POST'])
+@require_login
+def api_predict_heart():
+    """
+    Menerima data formulir 13 fitur, memprosesnya,
+    membuat prediksi, menyimpan ke log, dan mengembalikan hasil.
+    (VERSI DENGAN PREPROCESSING YANG BENAR)
+    """
+    if not heart_model or not heart_scaler or not heart_columns:
+        return jsonify({"error": "Model prediktor tidak dimuat di server."}), 500
+    
+    try:
+        # 1. Ambil data JSON dari formulir
+        data = request.get_json()
+        
+        # --- 2. PREPROCESSING (VERSI BARU & BENAR) ---
+        
+        # a. Buat "cetakan" DataFrame (1 baris, semua 0)
+        # Ini adalah "template" yang SAMA PERSIS dengan data training
+        processed_df = pd.DataFrame(0, index=[0], columns=heart_columns)
+
+        # b. Isi data sederhana (Numerik & Biner)
+        for col in ['age', 'sex', 'trestbps', 'chol', 'fbs', 'thalach', 'exang', 'oldpeak']:
+            if col in data:
+                processed_df.at[0, col] = data[col]
+
+        # c. Isi data One-Hot Encoding secara manual
+        # (Dataset Anda menggunakan 'drop_first=True', jadi kita abaikan kelas '0')
+        
+        # cp: 3 -> cp_3 = 1
+        if 'cp' in data and data['cp'] != 0:
+            col_name = f"cp_{data['cp']}"
+            if col_name in processed_df.columns:
+                processed_df.at[0, col_name] = 1
+        
+        # restecg: 2 -> restecg_2 = 1
+        if 'restecg' in data and data['restecg'] != 0:
+            col_name = f"restecg_{data['restecg']}"
+            if col_name in processed_df.columns:
+                processed_df.at[0, col_name] = 1
+
+        # slope: 1 -> slope_1 = 1
+        if 'slope' in data and data['slope'] != 0:
+            col_name = f"slope_{data['slope']}"
+            if col_name in processed_df.columns:
+                processed_df.at[0, col_name] = 1
+        
+        # ca: 2 -> ca_2 = 1
+        if 'ca' in data and data['ca'] != 0:
+            col_name = f"ca_{data['ca']}"
+            if col_name in processed_df.columns:
+                processed_df.at[0, col_name] = 1
+        
+        # thal: 3 -> thal_3 = 1 (Dataset UCI asli 1,2,3. 0 itu NULL)
+        if 'thal' in data and data['thal'] != 1: # '1' (Normal) adalah kelas yg di-drop
+            col_name = f"thal_{data['thal']}"
+            if col_name in processed_df.columns:
+                processed_df.at[0, col_name] = 1
+
+        # d. Penskalaan Fitur (Scaling)
+        numeric_cols = ['age', 'trestbps', 'chol', 'thalach', 'oldpeak']
+        processed_df[numeric_cols] = heart_scaler.transform(processed_df[numeric_cols])
+        
+        # --- 3. PREDIKSI ---
+        # Sekarang 'processed_df' 100% identik dengan data training
+        pred_class = heart_model.predict(processed_df)[0]
+        pred_proba = heart_model.predict_proba(processed_df)[0][1] # Probabilitas kelas 1
+        
+        # --- 4. SIMPAN KE LOG DATABASE ---
+        log_entry = HeartPredictionLog(
+            user_id=session['user_id'],
+            age=int(data['age']),
+            sex=int(data['sex']),
+            cp=int(data['cp']),
+            trestbps=int(data['trestbps']),
+            chol=int(data['chol']),
+            fbs=int(data['fbs']),
+            restecg=int(data['restecg']),
+            thalach=int(data['thalach']),
+            exang=int(data['exang']),
+            oldpeak=float(data['oldpeak']),
+            slope=int(data['slope']),
+            ca=int(data['ca']),
+            thal=int(data['thal']),
+            prediction_score=float(pred_proba),
+            prediction_class=int(pred_class)
+        )
+        db.session.add(log_entry)
+        db.session.commit()
+
+        # --- 5. Kembalikan Hasil ---
+        return jsonify({
+            "success": True,
+            "prediction_class": int(pred_class), # 0 atau 1
+            "prediction_score": float(pred_proba) # 0.0 s/d 1.0
+        })
+
+    except Exception as e:
+        print(f"Error di /api/predict_heart: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # 8. Menjalankan Aplikasi
 if __name__ == '__main__':

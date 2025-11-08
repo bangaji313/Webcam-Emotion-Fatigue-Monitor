@@ -37,3 +37,37 @@ class DetectionLog(db.Model):
 
     def __repr__(self):
         return f'<Log {self.id} by User {self.user_id}>'
+
+# ... (setelah class DetectionLog) ...
+
+class HeartPredictionLog(db.Model):
+    # Menautkan ke tabel 'heart_prediction_log'
+    __tablename__ = 'heart_prediction_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Fitur Input
+    age = db.Column(db.Integer, nullable=False)
+    sex = db.Column(db.Integer, nullable=False)
+    cp = db.Column(db.Integer, nullable=False)
+    trestbps = db.Column(db.Integer, nullable=False)
+    chol = db.Column(db.Integer, nullable=False)
+    fbs = db.Column(db.Integer, nullable=False)
+    restecg = db.Column(db.Integer, nullable=False)
+    thalach = db.Column(db.Integer, nullable=False)
+    exang = db.Column(db.Integer, nullable=False)
+    oldpeak = db.Column(db.Float, nullable=False)
+    slope = db.Column(db.Integer, nullable=False)
+    ca = db.Column(db.Integer, nullable=False)
+    thal = db.Column(db.Integer, nullable=False)
+    
+    # Fitur Output
+    prediction_score = db.Column(db.Float, nullable=False)
+    prediction_class = db.Column(db.Integer, nullable=False)
+    
+    timestamp = db.Column(db.TIMESTAMP(timezone=True), 
+                           server_default=func.now())
+
+    def __repr__(self):
+        return f'<HeartLog {self.id} by User {self.user_id}>'

@@ -1,0 +1,289 @@
+{% extends "layout.html" %}
+
+{% block title %}Prediktor Risiko Jantung{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Left Column: Input Form -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-primary text-white py-3">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-heartbeat me-2"></i>
+                    Formulir Prediksi Risiko Penyakit Jantung (CDSS)
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Masukkan data pasien (non-identitas) di bawah ini untuk memprediksi risiko penyakit jantung. 
+                    Data ini berdasarkan <a href="https://www.kaggle.com/datasets/cherngs/heart-disease-cleveland-uci" 
+                    target="_blank" class="alert-link">UCI Heart Disease Dataset</a>.
+                </div>
+                
+                <form id="heart-form" class="needs-validation" novalidate>
+                    <!-- Numerical Data Section --> 
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">
+                                <i class="fas fa-calculator me-2"></i>
+                                Data Numerik
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label for="age" class="form-label fw-semibold">
+                                        <i class="fas fa-user me-1"></i>Usia (Tahun)
+                                    </label>
+                                    <input type="number" 
+                                           class="form-control form-control-lg" 
+                                           id="age" 
+                                           name="age" 
+                                           placeholder="Masukkan usia (contoh: 54)"
+                                           min="1" 
+                                           max="120"
+                                           required>
+                                    <div class="invalid-feedback">
+                                        Mohon masukkan usia yang valid
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="trestbps" class="form-label fw-semibold">
+                                        <i class="fas fa-heartbeat me-1"></i>Tekanan Darah
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="number" 
+                                               class="form-control form-control-lg" 
+                                               id="trestbps" 
+                                               name="trestbps" 
+                                               placeholder="Contoh: 120"
+                                               required>
+                                        <span class="input-group-text">mmHg</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="chol" class="form-label fw-semibold">
+                                        <i class="fas fa-flask me-1"></i>Kolesterol
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="number" 
+                                               class="form-control form-control-lg" 
+                                               id="chol" 
+                                               name="chol" 
+                                               placeholder="Contoh: 230"
+                                               required>
+                                        <span class="input-group-text">mg/dl</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="thalach" class="form-label fw-semibold">
+                                        <i class="fas fa-heart me-1"></i>Detak Jantung Maks
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="number" 
+                                               class="form-control form-control-lg" 
+                                               id="thalach" 
+                                               name="thalach" 
+                                               placeholder="Contoh: 150"
+                                               required>
+                                        <span class="input-group-text">bpm</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="oldpeak" class="form-label fw-semibold">
+                                        <i class="fas fa-chart-line me-1"></i>ST Depression
+                                    </label>
+                                    <input type="number" 
+                                           step="0.1" 
+                                           class="form-control form-control-lg" 
+                                           id="oldpeak" 
+                                           name="oldpeak" 
+                                           placeholder="Contoh: 1.5"
+                                           required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                        
+                    <!-- Categorical Data Section -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">
+                                <i class="fas fa-list-alt me-2"></i>
+                                Data Kategorikal
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label for="sex" class="form-label fw-semibold">
+                                        <i class="fas fa-venus-mars me-1"></i>Jenis Kelamin
+                                    </label>
+                                    <select id="sex" name="sex" class="form-select form-select-lg" required>
+                                        <option value="">Pilih jenis kelamin</option>
+                                        <option value="1">Laki-laki</option>
+                                        <option value="0">Perempuan</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <label for="fbs" class="form-label fw-semibold">
+                                        <i class="fas fa-tint me-1"></i>Gula Darah Puasa > 120?
+                                    </label>
+                                    <select id="fbs" name="fbs" class="form-select form-select-lg" required>
+                                        <option value="">Pilih status gula darah</option>
+                                        <option value="0">Tidak</option>
+                                        <option value="1">Ya</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <label for="exang" class="form-label fw-semibold">
+                                        <i class="fas fa-running me-1"></i>Angina saat Latihan?
+                                    </label>
+                                    <select id="exang" name="exang" class="form-select form-select-lg" required>
+                                        <option value="">Pilih status angina</option>
+                                        <option value="0">Tidak</option>
+                                        <option value="1">Ya</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label for="cp" class="form-label fw-semibold">
+                                        <i class="fas fa-heart-broken me-1"></i>Tipe Nyeri Dada
+                                    </label>
+                                    <select id="cp" name="cp" class="form-select form-select-lg" required>
+                                        <option value="">Pilih tipe nyeri dada</option>
+                                        <option value="0">Typical Angina</option>
+                                        <option value="1">Atypical Angina</option>
+                                        <option value="2">Non-Anginal</option>
+                                        <option value="3">Asymptomatic</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label for="restecg" class="form-label fw-semibold">
+                                        <i class="fas fa-wave-square me-1"></i>Hasil EKG
+                                    </label>
+                                    <select id="restecg" name="restecg" class="form-select form-select-lg" required>
+                                        <option value="">Pilih hasil EKG</option>
+                                        <option value="0">Normal</option>
+                                        <option value="1">ST-T Abnormality</option>
+                                        <option value="2">LV Hypertrophy</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label for="slope" class="form-label fw-semibold">
+                                        <i class="fas fa-chart-line me-1"></i>Slope Puncak Latihan
+                                    </label>
+                                    <select id="slope" name="slope" class="form-select form-select-lg" required>
+                                        <option value="">Pilih tipe slope</option>
+                                        <option value="0">Upsloping</option>
+                                        <option value="1">Flat</option>
+                                        <option value="2">Downsloping</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label for="ca" class="form-label fw-semibold">
+                                        <i class="fas fa-vial me-1"></i>Pembuluh Darah
+                                    </label>
+                                    <select id="ca" name="ca" class="form-select form-select-lg" required>
+                                        <option value="">Pilih jumlah pembuluh</option>
+                                        <option value="0">0 Pembuluh</option>
+                                        <option value="1">1 Pembuluh</option>
+                                        <option value="2">2 Pembuluh</option>
+                                        <option value="3">3 Pembuluh</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label for="thal" class="form-label fw-semibold">
+                                        <i class="fas fa-microscope me-1"></i>Thalassemia
+                                    </label>
+                                    <select id="thal" name="thal" class="form-select form-select-lg" required>
+                                        <option value="">Pilih tipe thalassemia</option>
+                                        <option value="1">Normal</option>
+                                        <option value="2">Fixed Defect</option>
+                                        <option value="3">Reversible Defect</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg px-5 py-3 rounded-pill shadow-sm">
+                            <i class="fas fa-heartbeat me-2"></i>
+                            Prediksi Risiko
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column: Prediction Results -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-primary text-white py-3">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Hasil Prediksi
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="prediction-container" style="min-height: 300px;">
+                    <!-- Loading State -->
+                    <div id="heart-loader" class="text-center py-5" style="display: none;">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="text-muted mt-3">
+                            <i class="fas fa-cog fa-spin me-2"></i>
+                            Menganalisis data...
+                        </p>
+                    </div>
+                    
+                    <!-- Results Container -->
+                    <div id="heart-result-container" class="text-center py-4" style="display: none; width: 100%;">
+                        <canvas id="heartGaugeChart" style="max-height: 150px;"></canvas>
+                        <div class="result-icon mb-3">
+                            <i class="fas fa-clipboard-check fa-3x text-primary"></i>
+                        </div>
+                        <h3 class="fw-bold mb-3">Hasil Analisis</h3>
+                        <div class="result-box p-3 rounded-3 mb-3">
+                            <h2 id="heart-result-text" class="text-primary mb-2"></h2>
+                            <h4 id="heart-result-score" class="text-muted"></h4>
+                        </div>
+                    </div>
+
+                    <!-- Initial State -->
+                    <div id="heart-prompt" class="text-center py-5">
+                        <i class="fas fa-heart-pulse fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">
+                            Silakan isi formulir di samping untuk melihat hasil prediksi risiko penyakit jantung.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block head %}
+<!-- Font Awesome -->
+<link 
+    rel="stylesheet" 
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" 
+    integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA==" 
+    crossorigin="anonymous" 
+    referrerpolicy="no-referrer" />
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/heart_predictor.js') }}"></script>
+{% endblock %}

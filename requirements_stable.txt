@@ -1,0 +1,15 @@
+# Framework & Database
+flask
+flask-bcrypt
+flask-session
+sqlalchemy
+psycopg2-binary
+python-dotenv
+gunicorn
+
+# Stack ML/CV yang Stabil (untuk Haar Cascade & DeepFace)
+tensorflow==2.15.0
+opencv-python==4.8.0.76
+deepface
+Pillow
+numpy<1.26.4

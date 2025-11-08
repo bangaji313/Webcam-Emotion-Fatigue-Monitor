@@ -10,3 +10,9 @@ __pycache__/
 
 # File spesifik OS
 .DS_Store
+
+# Mengabaikan cache Jupyter Notebook
+/.ipynb_checkpoints/
+
+# Mengabaikan dataset CSV
+Heart_disease_cleveland_new.csv

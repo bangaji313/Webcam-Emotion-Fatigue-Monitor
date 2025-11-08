@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin - Log Prediksi Jantung{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-header">
+        <h5 class="mb-0">Log Prediksi Risiko Jantung (Semua Pengguna)</h5>
+    </div>
+    <div class="card-body">
+        <p>Menampilkan semua riwayat prediksi yang telah dilakukan oleh seluruh pengguna di sistem.</p>
+        
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th scope="col">Timestamp</th>
+                        <th scope="col">Pengguna (NRP)</th>
+                        <th scope="col">Hasil</th>
+                        <th scope="col">Probabilitas</th>
+                        <!-- Kolom Data Input (disederhanakan) -->
+                        <th scope="col">Usia</th>
+                        <th scope="col">Sex</th>
+                        <th scope="col">CP</th>
+                        <th scope="col">Trestbps</th>
+                        <th scope="col">Chol</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Loop melalui data 'logs' yang kita kirim dari app.py -->
+                    <!-- Setiap 'item' berisi (log, user) -->
+                    {% for item in logs %}
+                        <tr>
+                            <td>{{ item.HeartPredictionLog.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>{{ item.User.nama }} ({{ item.User.nrp }})</td>
+                            <td>
+                                {% if item.HeartPredictionLog.prediction_class == 1 %}
+                                    <span class="badge bg-danger">Risiko Tinggi</span>
+                                {% else %}
+                                    <span class="badge bg-success">Risiko Rendah</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ "%.2f"|format(item.HeartPredictionLog.prediction_score * 100) }}%</td>
+                            
+                            <!-- Data Input -->
+                            <td>{{ item.HeartPredictionLog.age }}</td>
+                            <td>{{ "L" if item.HeartPredictionLog.sex == 1 else "P" }}</td>
+                            <td>{{ item.HeartPredictionLog.cp }}</td>
+                            <td>{{ item.HeartPredictionLog.trestbps }}</td>
+                            <td>{{ item.HeartPredictionLog.chol }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center">Belum ada data prediksi yang tersimpan.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
