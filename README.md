@@ -114,10 +114,11 @@ pip install -r requirements.txt
 ```
 
 ### 3. Setup Database
-
+```bash
 # 1. Buka pgAdmin 4
 # 2. Buat database baru bernama 'webcam_health_db'
 # 3. Eksekusi skrip SQL dari 'database/init.sql' (pastikan 3 tabel dibuat)
+```
 
 ### 4. Setup Lingkungan (.env)
 
