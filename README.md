@@ -98,10 +98,9 @@ webcam_emotion_fatigue/
 * [Git](https://git-scm.com/downloads)
 
 ### 2. Setup Lingkungan
-
 ```bash
 # 1. Clone repository dan pindah ke branch ini
-git clone [https://github.com/bangaji313/Webcam-Emotion-Fatigue-Monitor.git](https://github.com/bangaji313/Webcam-Emotion-Fatigue-Monitor.git)
+git clone https://github.com/bangaji313/Webcam-Emotion-Fatigue-Monitor.git
 cd Webcam-Emotion-Fatigue-Monitor
 git switch v2.0-dual-system-release
 
@@ -115,7 +114,6 @@ pip install -r requirements.txt
 ```
 
 ### 3. Setup Database
-
 ```bash
 # 1. Buka pgAdmin 4
 # 2. Buat database baru bernama 'webcam_health_db'
