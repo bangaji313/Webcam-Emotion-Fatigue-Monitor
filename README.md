@@ -98,7 +98,7 @@ webcam_emotion_fatigue/
 * [Git](https://git-scm.com/downloads)
 
 ### 2. Setup Lingkungan
-
+```bash
 # 1. Clone repository dan pindah ke branch ini
 git clone [https://github.com/bangaji313/Webcam-Emotion-Fatigue-Monitor.git](https://github.com/bangaji313/Webcam-Emotion-Fatigue-Monitor.git)
 cd Webcam-Emotion-Fatigue-Monitor
@@ -111,14 +111,13 @@ conda activate webcam_health_stable
 # 3. Install semua dependensi
 # (File requirements.txt di branch ini sudah stabil)
 pip install -r requirements.txt
+```
 
 ### 3. Setup Database
 
-```bash
 # 1. Buka pgAdmin 4
 # 2. Buat database baru bernama 'webcam_health_db'
 # 3. Eksekusi skrip SQL dari 'database/init.sql' (pastikan 3 tabel dibuat)
-```
 
 ### 4. Setup Lingkungan (.env)
 
