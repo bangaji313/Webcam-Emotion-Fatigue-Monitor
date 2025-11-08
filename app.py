@@ -91,10 +91,8 @@ def test_db():
 
 @app.route('/')
 def index():
-    """Halaman utama, akan mengarahkan ke login jika belum login."""
-    if 'user_id' in session:
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+    """Halaman utama, akan menampilkan halaman onboarding."""
+    return render_template('onboarding.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -321,57 +319,77 @@ def api_analyze_frame():
     menyimpan ke log, dan mengembalikan hasil.
     """
     try:
+        print("[DEBUG] Mulai analisis frame...")
+        
         # 1. Ambil data gambar base64 dari JSON yang dikirim
         data = request.get_json()
         if 'image_data' not in data:
+            print("[ERROR] Data gambar tidak ditemukan dalam request")
             return jsonify({"error": "Data gambar tidak ditemukan"}), 400
 
         image_data_base64 = data['image_data']
+        print("[DEBUG] Data base64 diterima, panjang:", len(image_data_base64))
 
         # 2. Konversi base64 menjadi gambar NumPy
         image_np = convert_base64_to_image(image_data_base64)
         if image_np is None:
+            print("[ERROR] Gagal mengkonversi base64 ke gambar")
             return jsonify({"error": "Format gambar tidak valid"}), 400
+            
+        print("[DEBUG] Konversi gambar berhasil, shape:", image_np.shape)
 
-        # 3. Analisis Gambar (Menggunakan fungsi Tahap 4)
+        # 3. Analisis Gambar
         # --- Analisis Emosi ---
+        print("[DEBUG] Mulai analisis emosi...")
         emotion = analyze_emotion(image_np)
+        print("[DEBUG] Hasil analisis emosi:", emotion)
         
         # --- Analisis Kelelahan ---
         fatigue_score = 0.0 # Default 'bangun'
+        print("[DEBUG] Mulai analisis kelelahan...")
         
         # Hanya cek kelelahan JIKA wajah terdeteksi
-        # Ini penting untuk efisiensi
         if emotion != "no_face_detected" and emotion != "unknown":
             fatigue_score = analyze_fatigue(image_np)
+            print("[DEBUG] Hasil analisis kelelahan:", fatigue_score)
         else:
-            # Jika tidak ada wajah, kita tidak bisa menentukan kelelahan
-            fatigue_score = -1.0 # Kita beri kode -1 (artinya 'N/A')
+            fatigue_score = -1.0
+            print("[DEBUG] Skip analisis kelelahan (tidak ada wajah)")
 
         # 4. Simpan hasil ke Database
-        # Hanya simpan jika ada wajah terdeteksi
         if emotion != "no_face_detected" and emotion != "unknown":
-            current_user_id = session['user_id']
-            
-            new_log = DetectionLog(
-                user_id=current_user_id,
-                emotion=emotion,
-                fatigue_score=fatigue_score
-            )
-            db.session.add(new_log)
-            db.session.commit()
+            print("[DEBUG] Menyimpan hasil ke database...")
+            try:
+                current_user_id = session['user_id']
+                new_log = DetectionLog(
+                    user_id=current_user_id,
+                    emotion=emotion,
+                    fatigue_score=fatigue_score
+                )
+                db.session.add(new_log)
+                db.session.commit()
+                print("[DEBUG] Berhasil menyimpan ke database")
+            except Exception as db_error:
+                print("[ERROR] Gagal menyimpan ke database:", str(db_error))
+                # Lanjutkan eksekusi meski gagal simpan ke DB
 
         # 5. Kembalikan hasil sebagai JSON
+        print("[DEBUG] Mengirim response...")
         return jsonify({
             "success": True,
             "emotion": emotion,
-            "fatigue_score": fatigue_score # 0.0 (bangun), 1.0 (lelah), -1.0 (N/A)
+            "fatigue_score": fatigue_score
         }), 200
 
     except Exception as e:
-        # Tangani error umum
-        print(f"Server Error di /api/analyze_frame: {e}")
-        return jsonify({"error": "Terjadi kesalahan di server", "details": str(e)}), 500
+        print(f"[ERROR] Server Error di /api/analyze_frame:", str(e))
+        # Tangkap traceback lengkap untuk debugging
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "Terjadi kesalahan di server",
+            "details": str(e)
+        }), 500
 
 @app.route('/api/logs', methods=['GET'])
 @require_login
@@ -492,100 +510,133 @@ def api_predict_heart():
     """
     Menerima data formulir 13 fitur, memprosesnya,
     membuat prediksi, menyimpan ke log, dan mengembalikan hasil.
-    (VERSI DENGAN PREPROCESSING YANG BENAR)
     """
-    if not heart_model or not heart_scaler or not heart_columns:
+    print("[DEBUG] Mulai prediksi heart disease...")
+    
+    # Periksa model
+    if not heart_model:
+        print("[ERROR] Model heart tidak dimuat")
         return jsonify({"error": "Model prediktor tidak dimuat di server."}), 500
+    if not heart_scaler:
+        print("[ERROR] Scaler heart tidak dimuat")
+        return jsonify({"error": "Scaler tidak dimuat di server."}), 500
+    if not heart_columns:
+        print("[ERROR] Kolom heart tidak dimuat")
+        return jsonify({"error": "Konfigurasi kolom tidak dimuat di server."}), 500
     
     try:
         # 1. Ambil data JSON dari formulir
         data = request.get_json()
+        print("[DEBUG] Data diterima:", data)
         
-        # --- 2. PREPROCESSING (VERSI BARU & BENAR) ---
+        # Validasi data
+        required_fields = ['age', 'sex', 'cp', 'trestbps', 'chol', 'fbs', 'restecg', 
+                          'thalach', 'exang', 'oldpeak', 'slope', 'ca', 'thal']
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            print("[ERROR] Fields yang hilang:", missing_fields)
+            return jsonify({"error": f"Data tidak lengkap. Fields yang hilang: {', '.join(missing_fields)}"}), 400
         
-        # a. Buat "cetakan" DataFrame (1 baris, semua 0)
-        # Ini adalah "template" yang SAMA PERSIS dengan data training
+        # --- 2. PREPROCESSING ---
+        print("[DEBUG] Mulai preprocessing data...")
+        
+        # a. Buat DataFrame template
         processed_df = pd.DataFrame(0, index=[0], columns=heart_columns)
+        print("[DEBUG] Kolom yang tersedia:", heart_columns)
 
         # b. Isi data sederhana (Numerik & Biner)
-        for col in ['age', 'sex', 'trestbps', 'chol', 'fbs', 'thalach', 'exang', 'oldpeak']:
-            if col in data:
-                processed_df.at[0, col] = data[col]
+        numeric_binary_cols = ['age', 'sex', 'trestbps', 'chol', 'fbs', 'thalach', 'exang', 'oldpeak']
+        for col in numeric_binary_cols:
+            processed_df.at[0, col] = data[col]
+        print("[DEBUG] Data numerik dan biner berhasil diisi")
 
-        # c. Isi data One-Hot Encoding secara manual
-        # (Dataset Anda menggunakan 'drop_first=True', jadi kita abaikan kelas '0')
-        
-        # cp: 3 -> cp_3 = 1
-        if 'cp' in data and data['cp'] != 0:
-            col_name = f"cp_{data['cp']}"
-            if col_name in processed_df.columns:
-                processed_df.at[0, col_name] = 1
-        
-        # restecg: 2 -> restecg_2 = 1
-        if 'restecg' in data and data['restecg'] != 0:
-            col_name = f"restecg_{data['restecg']}"
-            if col_name in processed_df.columns:
-                processed_df.at[0, col_name] = 1
+        # c. One-Hot Encoding
+        categorical_mappings = {
+            'cp': [1, 2, 3],
+            'restecg': [1, 2],
+            'slope': [1, 2],
+            'ca': [1, 2, 3],
+            'thal': [2, 3]  # 1 adalah reference class
+        }
 
-        # slope: 1 -> slope_1 = 1
-        if 'slope' in data and data['slope'] != 0:
-            col_name = f"slope_{data['slope']}"
-            if col_name in processed_df.columns:
-                processed_df.at[0, col_name] = 1
-        
-        # ca: 2 -> ca_2 = 1
-        if 'ca' in data and data['ca'] != 0:
-            col_name = f"ca_{data['ca']}"
-            if col_name in processed_df.columns:
-                processed_df.at[0, col_name] = 1
-        
-        # thal: 3 -> thal_3 = 1 (Dataset UCI asli 1,2,3. 0 itu NULL)
-        if 'thal' in data and data['thal'] != 1: # '1' (Normal) adalah kelas yg di-drop
-            col_name = f"thal_{data['thal']}"
-            if col_name in processed_df.columns:
-                processed_df.at[0, col_name] = 1
+        for feature, values in categorical_mappings.items():
+            feature_val = data[feature]
+            if feature_val != 0:  # Skip jika 0 (reference class)
+                col_name = f"{feature}_{feature_val}"
+                if col_name in processed_df.columns:
+                    processed_df.at[0, col_name] = 1
+                    print(f"[DEBUG] Set {col_name} = 1")
+                else:
+                    print(f"[WARNING] Kolom {col_name} tidak ditemukan")
 
-        # d. Penskalaan Fitur (Scaling)
+        # d. Scaling
+        print("[DEBUG] Melakukan scaling fitur numerik...")
         numeric_cols = ['age', 'trestbps', 'chol', 'thalach', 'oldpeak']
-        processed_df[numeric_cols] = heart_scaler.transform(processed_df[numeric_cols])
+        try:
+            processed_df[numeric_cols] = heart_scaler.transform(processed_df[numeric_cols])
+            print("[DEBUG] Scaling berhasil")
+        except Exception as scale_error:
+            print(f"[ERROR] Gagal melakukan scaling: {scale_error}")
+            return jsonify({"error": "Gagal memproses data numerik"}), 500
         
         # --- 3. PREDIKSI ---
-        # Sekarang 'processed_df' 100% identik dengan data training
-        pred_class = heart_model.predict(processed_df)[0]
-        pred_proba = heart_model.predict_proba(processed_df)[0][1] # Probabilitas kelas 1
+        print("[DEBUG] Membuat prediksi...")
+        print("[DEBUG] Shape data:", processed_df.shape)
+        print("[DEBUG] Kolom data:", processed_df.columns.tolist())
+        
+        try:
+            pred_class = heart_model.predict(processed_df)[0]
+            pred_proba = heart_model.predict_proba(processed_df)[0][1]
+            print(f"[DEBUG] Hasil prediksi - Class: {pred_class}, Probability: {pred_proba}")
+        except Exception as pred_error:
+            print(f"[ERROR] Gagal membuat prediksi: {pred_error}")
+            return jsonify({"error": "Gagal membuat prediksi"}), 500
         
         # --- 4. SIMPAN KE LOG DATABASE ---
-        log_entry = HeartPredictionLog(
-            user_id=session['user_id'],
-            age=int(data['age']),
-            sex=int(data['sex']),
-            cp=int(data['cp']),
-            trestbps=int(data['trestbps']),
-            chol=int(data['chol']),
-            fbs=int(data['fbs']),
-            restecg=int(data['restecg']),
-            thalach=int(data['thalach']),
-            exang=int(data['exang']),
-            oldpeak=float(data['oldpeak']),
-            slope=int(data['slope']),
-            ca=int(data['ca']),
-            thal=int(data['thal']),
-            prediction_score=float(pred_proba),
-            prediction_class=int(pred_class)
-        )
-        db.session.add(log_entry)
-        db.session.commit()
+        print("[DEBUG] Menyimpan hasil ke database...")
+        try:
+            log_entry = HeartPredictionLog(
+                user_id=session['user_id'],
+                age=int(data['age']),
+                sex=int(data['sex']),
+                cp=int(data['cp']),
+                trestbps=int(data['trestbps']),
+                chol=int(data['chol']),
+                fbs=int(data['fbs']),
+                restecg=int(data['restecg']),
+                thalach=int(data['thalach']),
+                exang=int(data['exang']),
+                oldpeak=float(data['oldpeak']),
+                slope=int(data['slope']),
+                ca=int(data['ca']),
+                thal=int(data['thal']),
+                prediction_score=float(pred_proba),
+                prediction_class=int(pred_class)
+            )
+            db.session.add(log_entry)
+            db.session.commit()
+            print("[DEBUG] Berhasil menyimpan ke database")
+        except Exception as db_error:
+            print(f"[ERROR] Gagal menyimpan ke database: {db_error}")
+            # Tetap lanjutkan meski gagal simpan ke DB
 
         # --- 5. Kembalikan Hasil ---
-        return jsonify({
+        response_data = {
             "success": True,
-            "prediction_class": int(pred_class), # 0 atau 1
-            "prediction_score": float(pred_proba) # 0.0 s/d 1.0
-        })
+            "prediction_class": int(pred_class),
+            "prediction_score": float(pred_proba)
+        }
+        print("[DEBUG] Mengirim response:", response_data)
+        return jsonify(response_data)
 
     except Exception as e:
-        print(f"Error di /api/predict_heart: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"[ERROR] Error di /api/predict_heart: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": str(e),
+            "details": traceback.format_exc()
+        }), 500
 
 # 8. Menjalankan Aplikasi
 if __name__ == '__main__':

@@ -2,6 +2,16 @@
 
 {% block title %}Prediktor Risiko Jantung{% endblock %}
 
+{% block extra_css %}
+<!-- Font Awesome (diperlukan oleh layout.html, tapi kita pastikan ada di sini) -->
+<link 
+    rel="stylesheet" 
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" 
+    xintegrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA==" 
+    crossorigin="anonymous" 
+    referrerpolicy="no-referrer" />
+{% endblock %}
+
 {% block content %}
 <div class="row g-4">
     <!-- Left Column: Input Form -->
@@ -205,7 +215,7 @@
                                     </label>
                                     <select id="thal" name="thal" class="form-select form-select-lg" required>
                                         <option value="">Pilih tipe thalassemia</option>
-                                        <option value="1">Normal</option>
+                                        <option value="1">Normal</Doption>
                                         <option value="2">Fixed Defect</option>
                                         <option value="3">Reversible Defect</option>
                                     </select>
@@ -235,7 +245,7 @@
                 </h5>
             </div>
             <div class="card-body p-4">
-                <div class="prediction-container" style="min-height: 300px;">
+                <div class="prediction-container" style="min-height: 300px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
                     <!-- Loading State -->
                     <div id="heart-loader" class="text-center py-5" style="display: none;">
                         <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
@@ -250,8 +260,8 @@
                     <!-- Results Container -->
                     <div id="heart-result-container" class="text-center py-4" style="display: none; width: 100%;">
                         <canvas id="heartGaugeChart" style="max-height: 150px;"></canvas>
-                        <div class="result-icon mb-3">
-                            <i class="fas fa-clipboard-check fa-3x text-primary"></i>
+                        <div class="result-icon mb-3 mt-3">
+                            <!-- Ikon akan diubah oleh JS -->
                         </div>
                         <h3 class="fw-bold mb-3">Hasil Analisis</h3>
                         <div class="result-box p-3 rounded-3 mb-3">
@@ -274,16 +284,9 @@
 </div>
 {% endblock %}
 
-{% block head %}
-<!-- Font Awesome -->
-<link 
-    rel="stylesheet" 
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" 
-    integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA==" 
-    crossorigin="anonymous" 
-    referrerpolicy="no-referrer" />
-{% endblock %}
 
-{% block scripts %}
+<!-- INI PERBAIKANNYA: ganti 'scripts' agar cocok dengan layout.html -->
+{% block extra_js %}
+<!-- Chart.js sudah ada di layout.html -->
 <script src="{{ url_for('static', filename='js/heart_predictor.js') }}"></script>
 {% endblock %}
