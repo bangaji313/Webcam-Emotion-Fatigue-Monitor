@@ -1,206 +1,137 @@
 // Menjalankan kode hanya setelah seluruh halaman HTML dimuat
 document.addEventListener('DOMContentLoaded', () => {
 
-    // --- 1. Referensi ke Elemen-elemen HTML ---
+    // --- 1. Referensi ke Elemen-elemen HTML (Tidak Berubah) ---
     const video = document.getElementById('webcam');
     const btnStart = document.getElementById('btnStart');
     const btnStop = document.getElementById('btnStop');
-    
     const statusEmotion = document.getElementById('statusEmotion');
     const statusFatigue = document.getElementById('statusFatigue');
     const loader = document.getElementById('loader');
     const statusResult = document.getElementById('statusResult');
 
-    // Variabel untuk menyimpan stream webcam dan interval
+    // Variabel (Tidak Berubah)
     let stream = null;
     let analysisInterval = null;
-    const ANALYSIS_DELAY = 5000; // Analisis setiap 5 detik
+    const ANALYSIS_DELAY = 5000;
 
-    // --- 2. Inisialisasi Grafik (Chart.js) ---
+    // --- 2. Inisialisasi Grafik (Chart.js) (Tidak Berubah) ---
     const ctx = document.getElementById('healthChart').getContext('2d');
     const healthChart = new Chart(ctx, {
-        type: 'line', // Jenis grafik
+        type: 'line', 
         data: {
-            labels: [], // Sumbu X (waktu)
-            datasets: [
-                {
-                    label: 'Skor Kelelahan (1=Lelah, 0=Bangun)',
-                    data: [], // Sumbu Y untuk kelelahan
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                    yAxisID: 'yFatigue', // Tautkan ke sumbu Y kiri
-                },
-            ]
+            labels: [],
+            datasets: [{
+                label: 'Skor Kelelahan (1=Lelah, 0=Bangun)',
+                data: [], 
+                borderColor: 'rgba(255, 99, 132, 1)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                yAxisID: 'yFatigue', 
+            }]
         },
         options: {
             responsive: true,
             scales: {
-                x: {
-                    title: { display: true, text: 'Waktu' }
-                },
-                // Sumbu Y Kiri untuk Kelelahan
+                x: { title: { display: true, text: 'Waktu' } },
                 yFatigue: {
                     type: 'linear',
                     position: 'left',
                     title: { display: true, text: 'Skor Kelelahan' },
-                    min: -1,
+                    min: -1, // Skala grafik kita sudah benar (0-1)
                     max: 1 
                 }
             }
         }
     });
 
-    // ==========================================================
-    // --- FUNGSI BARU UNTUK MEMUAT DATA HISTORI ---
-    // ==========================================================
+    // --- 3. Fungsi Load Histori (Tidak Berubah) ---
     async function loadInitialChartData() {
         try {
-            const response = await fetch('/api/logs'); // Panggil API log
-            if (!response.ok) {
-                console.error("Gagal memuat log histori");
-                return;
-            }
-            
+            const response = await fetch('/api/logs');
+            if (!response.ok) return;
             const data = await response.json();
-            
             if (data.success && data.logs) {
                 const labels = [];
                 const fatigueData = [];
-                
-                // Proses data log
                 data.logs.forEach(log => {
                     const ts = new Date(log.timestamp);
-                    // Format waktu agar rapi
                     const label = `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}:${ts.getSeconds().toString().padStart(2, '0')}`;
-                    
-                    // Hanya tampilkan data valid di grafik (bukan 'N/A')
                     if(log.fatigue_score > -1.0) {
                         labels.push(label);
-                        fatigueData.push(log.fatigue_score);
+                        fatigueData.push(log.fatigue_score); // Mendorong skor float
                     }
                 });
-
-                // Batasi data (misal 50 poin terakhir)
                 const MAX_POINTS = 50;
                 healthChart.data.labels = labels.slice(-MAX_POINTS);
                 healthChart.data.datasets[0].data = fatigueData.slice(-MAX_POINTS);
-                
-                // Perbarui grafik dengan data histori
                 healthChart.update();
             }
-            
         } catch (error) {
             console.error("Error memuat data grafik:", error);
         }
     }
 
-    // --- 3. Logika Tombol ---
-
-    // A. Tombol START
+    // --- 4. Logika Tombol Start/Stop (Tidak Berubah) ---
     btnStart.addEventListener('click', async () => {
         try {
-            // 1. Minta akses webcam
-            stream = await navigator.mediaDevices.getUserMedia({ 
-                video: true, 
-                audio: false 
-            });
-            
-            // 2. Tampilkan stream di elemen <video>
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
             video.srcObject = stream;
-            video.play(); // Mulai memutar video
-
-            // 3. Ubah status tombol
+            video.play();
             btnStart.disabled = true;
             btnStop.disabled = false;
             statusEmotion.textContent = 'Memulai...';
             statusFatigue.textContent = 'Memulai...';
-
-            // 4. Mulai interval analisis
-            // Panggil 'sendFrame' segera, lalu ulangi setiap 5 detik
-            sendFrame(); // Panggil pertama kali
+            sendFrame(); 
             analysisInterval = setInterval(sendFrame, ANALYSIS_DELAY);
-
         } catch (error) {
             console.error('Error saat mengakses webcam:', error);
             alert('Tidak dapat mengakses webcam. Pastikan Anda memberikan izin.');
         }
     });
 
-    // B. Tombol STOP
     btnStop.addEventListener('click', () => {
         if (stream) {
-            // 1. Matikan semua track (lampu webcam mati)
             stream.getTracks().forEach(track => track.stop());
         }
-        
-        // 2. Hentikan interval
         if (analysisInterval) {
             clearInterval(analysisInterval);
             analysisInterval = null;
         }
-
-        // 3. Ubah status tombol dan teks
         btnStart.disabled = false;
         btnStop.disabled = true;
-        video.srcObject = null; // Hentikan pemutaran
+        video.srcObject = null;
         statusEmotion.textContent = 'Menunggu';
         statusFatigue.textContent = 'Menunggu';
         hideLoading();
     });
 
-    // --- 4. Fungsi Inti: Kirim Frame ke Backend ---
-    
+    // --- 5. Fungsi 'sendFrame' (Tidak Berubah) ---
     async function sendFrame() {
-        if (!stream || video.readyState < video.HAVE_CURRENT_DATA) {
-            // Jika video belum siap, jangan lakukan apa-apa
-            return;
-        }
-
-        // Tampilkan loader, sembunyikan hasil sebelumnya
+        if (!stream || video.readyState < video.HAVE_CURRENT_DATA) return;
         showLoading();
-
-        // 1. Ambil gambar dari <video> dan ubah ke Base64
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const context = canvas.getContext('2d');
-        
-        // Cerminkan gambar saat menggambar di canvas
         context.translate(canvas.width, 0);
         context.scale(-1, 1);
-        
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // 'toDataURL' membuat string Base64
         const imageDataBase64 = canvas.toDataURL('image/jpeg');
-
         try {
-            // 2. Kirim data ke API (seperti di Postman)
             const response = await fetch('/api/analyze_frame', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ image_data: imageDataBase64 })
             });
-
-            // Sembunyikan loader setelah data kembali
             hideLoading();
-
             if (!response.ok) {
-                // Jika server error (500) atau (400)
                 console.error('API Error:', response.status, await response.text());
                 updateStatusUI('error', 'error');
                 return;
             }
-
-            // 3. Terima hasil JSON
             const result = await response.json();
-
-            // 4. Update UI (teks status dan grafik)
             updateStatusUI(result.emotion, result.fatigue_score);
-            updateChart(result.fatigue_score); // Ini fungsi update real-time
-
+            updateChart(result.fatigue_score);
         } catch (error) {
             console.error('Gagal mengirim frame:', error);
             hideLoading();
@@ -208,12 +139,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- 5. Fungsi Pembantu (Helper) ---
-
+    // ==========================================================
+    // --- 6. MODIFIKASI: FUNGSI 'updateStatusUI' ---
+    // ==========================================================
     function updateStatusUI(emotion, fatigue) {
-        // A. Update Teks Emosi
+        // A. Update Teks Emosi (Tidak Berubah)
         statusEmotion.textContent = emotion;
-        // Ubah warna badge berdasarkan emosi
         switch(emotion) {
             case 'happy': statusEmotion.className = 'badge bg-success'; break;
             case 'sad': statusEmotion.className = 'badge bg-primary'; break;
@@ -223,17 +154,25 @@ document.addEventListener('DOMContentLoaded', () => {
             default: statusEmotion.className = 'badge bg-secondary';
         }
 
-        // B. Update Teks Kelelahan
+        // --- B. Update Teks Kelelahan (LOGIKA BARU DENGAN THRESHOLD) ---
         let fatigueText = 'N/A';
         let fatigueClass = 'badge bg-secondary';
+        
+        // Tentukan ambang batas. (Model kita 0=awake, 1=sleepy)
+        // Jadi, jika skor > 0.5, kita anggap lelah.
+        const FATIGUE_THRESHOLD = 0.5; 
 
-        if (fatigue === 0.0) {
-            fatigueText = 'Bangun';
-            fatigueClass = 'badge bg-success';
-        } else if (fatigue === 1.0) {
-            fatigueText = 'Lelah (Mata Terpejam)';
-            fatigueClass = 'badge bg-danger';
-        } else if (fatigue === -1.0) {
+        if (fatigue > -1.0) { // Jika ada deteksi (skor bukan -1.0)
+            if (fatigue < FATIGUE_THRESHOLD) {
+                // Skor di bawah 0.5 -> Bangun
+                fatigueText = `Bangun (Skor: ${fatigue.toFixed(2)})`;
+                fatigueClass = 'badge bg-success';
+            } else {
+                // Skor di atas 0.5 -> Lelah
+                fatigueText = `Lelah (Skor: ${fatigue.toFixed(2)})`;
+                fatigueClass = 'badge bg-danger';
+            }
+        } else if (fatigue === -1.0) { // no_face_detected
             fatigueText = 'Tidak Ada Wajah';
             fatigueClass = 'badge bg-warning';
         }
@@ -241,27 +180,23 @@ document.addEventListener('DOMContentLoaded', () => {
         statusFatigue.textContent = fatigueText;
         statusFatigue.className = fatigueClass;
     }
+    // ----------------------------------------------------------
 
-    // Ini adalah fungsi untuk update REAL-TIME
+    // --- 7. Fungsi Helper Lainnya (Tidak Berubah) ---
+    
+    // Fungsi ini SUDAH BENAR, karena 'fatigueScore'
+    // adalah variabel, jadi dia akan mendorong skor float (cth: 0.87)
     function updateChart(fatigueScore) {
-        // Hanya tambahkan ke grafik jika skornya valid (bukan N/A)
         if (fatigueScore === -1.0) return;
-
         const now = new Date();
         const label = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-
-        // Tambahkan data baru
         healthChart.data.labels.push(label);
-        healthChart.data.datasets[0].data.push(fatigueScore); // [0] = dataset Kelelahan
-
-        // Batasi data agar grafik tidak terlalu penuh (misal: 10 poin data)
+        healthChart.data.datasets[0].data.push(fatigueScore); 
         const MAX_DATA_POINTS = 10;
         if (healthChart.data.labels.length > MAX_DATA_POINTS) {
-            healthChart.data.labels.shift(); // Hapus data terlama
-            healthChart.data.datasets[0].data.shift(); // Hapus data terlama
+            healthChart.data.labels.shift();
+            healthChart.data.datasets[0].data.shift();
         }
-
-        // Perbarui grafik
         healthChart.update();
     }
 
@@ -275,8 +210,6 @@ document.addEventListener('DOMContentLoaded', () => {
         statusResult.style.display = 'block';
     }
 
-    // ==========================================================
-    // --- PANGGIL FUNGSI BARU SAAT HALAMAN DIMUAT ---
-    // ==========================================================
+    // --- 8. Panggil Load Histori (Tidak Berubah) ---
     loadInitialChartData();
 });

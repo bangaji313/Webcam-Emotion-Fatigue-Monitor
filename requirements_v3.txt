@@ -1,0 +1,22 @@
+# Keras 3 (Standalone) - WAJIB DI ATAS
+keras
+
+# Backend ML (TensorFlow akan otomatis ditarik oleh Keras)
+tensorflow
+
+# Framework & Database
+flask
+flask-bcrypt
+flask-session
+sqlalchemy
+psycopg2-binary
+python-dotenv
+gunicorn
+
+# Stack CV & Utils
+opencv-python
+deepface
+matplotlib
+scipy
+notebook
+Pillow

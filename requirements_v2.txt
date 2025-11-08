@@ -1,0 +1,17 @@
+# Framework & Database
+flask
+flask-bcrypt
+flask-session
+sqlalchemy
+psycopg2-binary
+python-dotenv
+gunicorn
+
+# Stack ML/CV yang KOMPATIBEL
+tensorflow==2.15.0       # Basis utama kita (sudah termasuk Keras 2.15)
+opencv-python==4.8.0.76  # Kompatibel dengan numpy 1.x
+deepface                 # Diinstal terakhir, akan beradaptasi dengan TF 2.15
+matplotlib               # Untuk notebook
+scipy                    # Untuk notebook
+notebook                 # Untuk notebook
+Pillow                   # Untuk PIL

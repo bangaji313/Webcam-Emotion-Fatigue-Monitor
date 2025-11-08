@@ -5,154 +5,155 @@ from extensions import db, bcrypt, server_session
 from models import User, DetectionLog
 from dotenv import load_dotenv
 from functools import wraps
-import io
+import io 
 import csv
 from flask import make_response
 
-# --- Impor Baru untuk Analisis Gambar ---
+# --- Impor Analisis Gambar ---
 import cv2
 import numpy as np
 import base64
-import io
 from PIL import Image
 from deepface import DeepFace
 
+# ==========================================================
+# --- 1. MODIFIKASI: IMPOR LAYER DARI 'tensorflow.keras' ---
+# ==========================================================
+import tensorflow as tf
+from keras.models import Sequential
+from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+import contextlib
+
+# Ukuran input HARUS sama dengan saat kita training
+IMG_HEIGHT = 24
+IMG_WIDTH = 24
+# ----------------------------------------------------------
+
 # --- Penambahan untuk Classifier Mata ---
-# Mencari path tempat data OpenCV disimpan
 cv2_base_dir = os.path.dirname(os.path.abspath(cv2.__file__))
 haar_model_path = os.path.join(cv2_base_dir, 'data', 'haarcascade_eye.xml')
-
 if not os.path.exists(haar_model_path):
-    print(f"Error: Tidak dapat menemukan 'haarcascade_eye.xml' di {haar_model_path}")
-    # Di beberapa sistem, path-nya mungkin 'haarcascade_eye_tree_eyeglasses.xml'
-    # Jika error, kita bisa ganti nama file di atas.
-    sys.exit("Gagal memuat model Haar Cascade Mata. Cek instalasi OpenCV.")
-
-# Muat classifier mata
+    sys.exit("Gagal memuat model Haar Cascade Mata.")
 eye_cascade = cv2.CascadeClassifier(haar_model_path)
 
-# 2. Muat variabel lingkungan dari file .env
+
+# ==========================================================
+# --- 2. FUNGSI UNTUK MEMBANGUN MODEL (ARSITEKTUR BENAR) ---
+# ==========================================================
+# Arsitektur 'RINGAN' (2x Conv, 1x Dense(64))
+def create_eye_model():
+    model = Sequential()
+    model.add(Conv2D(32, (3, 3), activation='relu', input_shape=(IMG_HEIGHT, IMG_WIDTH, 1)))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Conv2D(64, (3, 3), activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Flatten())
+    model.add(Dense(64, activation='relu')) 
+    model.add(Dropout(0.5))
+    model.add(Dense(1, activation='sigmoid'))
+    return model
+
+# ==========================================================
+# --- 3. Muat Bobot dengan DUMMY CALL (SUDAH BENAR) ---
+# ==========================================================
+MODEL_WEIGHTS_PATH = 'eye_status_model.weights.h5'
+if not os.path.exists(MODEL_WEIGHTS_PATH):
+    sys.exit(f"Error: File bobot model '{MODEL_WEIGHTS_PATH}' tidak ditemukan.")
+
+print("Membangun arsitektur model (versi ringan)...")
+tf.get_logger().setLevel('ERROR') 
+eye_model = create_eye_model()
+print("Arsitektur model dibuat.")
+
+print("Mem-build model graph (dummy call)...")
+dummy_input = tf.zeros((1, IMG_HEIGHT, IMG_WIDTH, 1))
+_ = eye_model(dummy_input) 
+print("Model graph berhasil di-build.")
+
+print(f"Memuat bobot model dari: {MODEL_WEIGHTS_PATH}...")
+eye_model.load_weights(MODEL_WEIGHTS_PATH)
+print("Bobot model berhasil dimuat.")
+tf.get_logger().setLevel('INFO') 
+# ----------------------------------------------------------
+
+# (Sisa kode app.py Anda sama persis, tidak perlu diubah)
+
+# Muat variabel lingkungan dari file .env
 load_dotenv()
-
-# 3. Inisialisasi Aplikasi Flask
+# Inisialisasi Aplikasi Flask
 app = Flask(__name__)
-
-# 4. Konfigurasi Aplikasi
+# Konfigurasi Aplikasi
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
-
-# 5. Inisialisasi Ekstensi dengan Aplikasi Flask
-# Ini adalah cara untuk "mengikat" ekstensi ke 'app'
+# Inisialisasi Ekstensi dengan Aplikasi Flask
 db.init_app(app)
 bcrypt.init_app(app)
 server_session.init_app(app)
-
-# 6. Impor Model Database
-# Impor ini sekarang aman karena 'models.py' tidak lagi mengimpor 'app.py'
+# Impor Model Database
 from models import User, DetectionLog
-
-# 7. Route Uji Coba Awal
+# 7. Route Uji Coba Awal (Tidak Berubah)
 @app.route('/test-db')
 def test_db():
-    """Route untuk menguji koneksi database."""
     try:
-        # Gunakan 'db.session.execute' dengan string SQL
         db.session.execute(db.text('SELECT 1'))
         return "<h1>Koneksi Database Berhasil!</h1>"
     except Exception as e:
         return f"<h1>Koneksi Database Gagal:</h1><p>{e}</p>"
-
+# --- Rute Autentikasi (Tidak Berubah) ---
 @app.route('/')
 def index():
-    """Halaman utama, akan mengarahkan ke login jika belum login."""
     if 'user_id' in session:
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """Menangani pendaftaran pengguna baru."""
     if request.method == 'POST':
-        # 1. Ambil data dari form
         nrp = request.form.get('nrp')
         nama = request.form.get('nama')
         password = request.form.get('password')
-
         if not nrp or not nama or not password:
             flash('Semua field wajib diisi!', 'danger')
             return redirect(url_for('register'))
-
-        # 2. Cek apakah NRP sudah ada
         existing_user = User.query.filter_by(nrp=nrp).first()
         if existing_user:
             flash('NRP sudah terdaftar. Silakan gunakan NRP lain.', 'warning')
             return redirect(url_for('register'))
-
-        # 3. Hash password
-        # 'decode('utf-8')' penting untuk menyimpan hash sebagai string
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-
-        # 4. Buat user baru dan simpan ke database
-        # Kita akan buat admin manual, jadi role default selalu 'user'
         new_user = User(nrp=nrp, nama=nama, password_hash=hashed_password, role='user')
         db.session.add(new_user)
         db.session.commit()
-
         flash('Registrasi berhasil! Silakan login.', 'success')
         return redirect(url_for('login'))
-
-    # 5. Jika metodenya GET, tampilkan halaman register
     return render_template('register.html')
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Menangani proses login pengguna."""
     if request.method == 'POST':
-        # 1. Ambil data dari form
         nrp = request.form.get('nrp')
         password = request.form.get('password')
-
         if not nrp or not password:
             flash('NRP dan Password wajib diisi!', 'danger')
             return redirect(url_for('login'))
-
-        # 2. Cari user berdasarkan NRP
         user = User.query.filter_by(nrp=nrp).first()
-
-        # 3. Verifikasi user dan password
-        # 'bcrypt.check_password_hash' membandingkan password form dengan hash di DB
         if user and bcrypt.check_password_hash(user.password_hash, password):
-            # 4. Jika berhasil, simpan ID dan role ke dalam session
             session['user_id'] = user.id
             session['role'] = user.role
-            session['nama'] = user.nama # Menyimpan nama untuk ditampilkan
-            
+            session['nama'] = user.nama
             flash(f'Selamat datang kembali, {user.nama}!', 'success')
             return redirect(url_for('dashboard'))
         else:
-            # 5. Jika gagal, beri pesan error
             flash('Login Gagal. NRP atau Password salah.', 'danger')
             return redirect(url_for('login'))
-
-    # 6. Jika metodenya GET, tampilkan halaman login
     return render_template('login.html')
-
 @app.route('/logout')
 def logout():
-    """Menghapus sesi pengguna (logout)."""
-    session.clear() # Menghapus semua data dari session
+    session.clear()
     flash('Anda telah berhasil logout.', 'info')
     return redirect(url_for('login'))
-
-# --- DEKORATOR UNTUK OTENTIKASI ---
 def require_login(f):
-    """
-    Dekorator untuk memastikan pengguna sudah login sebelum mengakses route.
-    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
@@ -160,31 +161,16 @@ def require_login(f):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
-
+# --- Fungsi Helper Analisis (analyze_emotion tidak berubah) ---
 def convert_base64_to_image(base64_string):
-    """
-    Mengubah string base64 (dari format data URL JavaScript) menjadi 
-    gambar format array NumPy yang bisa dibaca OpenCV.
-    """
-    # Hapus header data URL (cth: "data:image/jpeg;base64,")
     if "," in base64_string:
         base64_string = base64_string.split(',')[1]
-        
     try:
-        # Decode base64 menjadi bytes
         img_bytes = base64.b64decode(base64_string)
-        
-        # Buat stream dari bytes
         img_io = io.BytesIO(img_bytes)
-        
-        # Buka gambar menggunakan PIL (membantu menangani format)
         pil_image = Image.open(img_io)
-        
-        # Ubah ke array NumPy (format yang disukai OpenCV)
-        # Pastikan dikonversi ke RGB
         open_cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGBA2RGB)
         return open_cv_image
-    
     except Exception as e:
         print(f"Error saat konversi base64: {e}")
         return None
@@ -203,7 +189,7 @@ def analyze_emotion(image_np):
             img_path=image_np,
             actions=['emotion'],
             enforce_detection=True, 
-            detector_backend='opencv' # 'opencv' adalah yang tercepat
+            detector_backend='retinaface' # <-- DIUBAH DARI 'opencv' ke 'retinaface'
         )
         
         # Hasilnya adalah list, kita ambil elemen pertama (jika ada)
@@ -217,136 +203,85 @@ def analyze_emotion(image_np):
         # Ini akan error jika 'enforce_detection=True' dan tidak ada wajah terdeteksi
         # print(f"DeepFace Error (kemungkinan tidak ada wajah): {e}")
         return "no_face_detected"
-    
 
+# --- Fungsi analyze_fatigue (TETAP SAMA seperti versi CNN Anda) ---
 def analyze_fatigue(image_np):
-    """
-    Menganalisis kelelahan berdasarkan deteksi mata tertutup.
-    Menggunakan Haar Cascade dari OpenCV.
-    
-    Mengembalikan skor:
-    0.0 = Terdeteksi Mata (Bangun)
-    1.0 = Tidak Terdeteksi Mata (Lelah/Terpejam)
-    """
     try:
-        # 1. Konversi ke Grayscale (wajib untuk Haar Cascades)
         gray_image = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
-        
-        # 2. Lakukan deteksi mata
-        # minSize adalah ukuran minimum mata yg dideteksi (30x30 pixel)
         eyes = eye_cascade.detectMultiScale(
             gray_image, 
             scaleFactor=1.1, 
             minNeighbors=10, 
             minSize=(40, 40)
         )
-        
-        # 3. Beri skor
-        if len(eyes) > 0:
-            # Jika 'eyes' (array) tidak kosong, berarti mata terdeteksi
-            return 0.0 # Skor 0.0 = Bangun
-        else:
-            # Jika 'eyes' kosong (tidak ada mata terdeteksi)
-            return 1.0 # Skor 1.0 = Lelah
-            
+        if len(eyes) == 0:
+            return 1.0 
+        predictions = []
+        for (x, y, w, h) in eyes:
+            eye_roi = gray_image[y:y+h, x:x+w]
+            resized_eye = cv2.resize(eye_roi, (IMG_WIDTH, IMG_HEIGHT))
+            normalized_eye = resized_eye / 255.0
+            input_eye = np.expand_dims(np.expand_dims(normalized_eye, axis=-1), axis=0)
+            pred = eye_model.predict(input_eye, verbose=0)[0][0]
+            predictions.append(pred)
+        return np.mean(predictions)
     except Exception as e:
-        # print(f"Error saat deteksi mata: {e}")
-        # Jika ada error, asumsikan 'bangun' agar aman
+        print(f"Error di analyze_fatigue (CNN): {e}")
         return 0.0
-
+# --- Sisa API ENDPOINTS (Tidak Berubah) ---
 @app.route('/dashboard')
-@require_login # Menerapkan 'penjaga' kita
+@require_login
 def dashboard():
-    """Halaman dashboard utama setelah login."""
-    # Kita akan mengisi ini nanti
     return render_template('dashboard.html', user_nama=session.get('nama'))
-
-# =================================================================
-#                         API ENDPOINTS
-# =================================================================
-
 @app.route('/api/analyze_frame', methods=['POST'])
-@require_login # Hanya user yang sudah login yang bisa mengakses ini
+@require_login
 def api_analyze_frame():
-    """
-    Menerima frame gambar dari frontend, menganalisis emosi & kelelahan,
-    menyimpan ke log, dan mengembalikan hasil.
-    """
     try:
-        # 1. Ambil data gambar base64 dari JSON yang dikirim
         data = request.get_json()
         if 'image_data' not in data:
             return jsonify({"error": "Data gambar tidak ditemukan"}), 400
-
         image_data_base64 = data['image_data']
-
-        # 2. Konversi base64 menjadi gambar NumPy
         image_np = convert_base64_to_image(image_data_base64)
         if image_np is None:
             return jsonify({"error": "Format gambar tidak valid"}), 400
-
-        # 3. Analisis Gambar (Menggunakan fungsi Tahap 4)
-        # --- Analisis Emosi ---
         emotion = analyze_emotion(image_np)
-        
-        # --- Analisis Kelelahan ---
-        fatigue_score = 0.0 # Default 'bangun'
-        
-        # Hanya cek kelelahan JIKA wajah terdeteksi
-        # Ini penting untuk efisiensi
+        fatigue_score = 0.0 
         if emotion != "no_face_detected" and emotion != "unknown":
-            fatigue_score = analyze_fatigue(image_np)
+            fatigue_score = analyze_fatigue(image_np) 
         else:
-            # Jika tidak ada wajah, kita tidak bisa menentukan kelelahan
-            fatigue_score = -1.0 # Kita beri kode -1 (artinya 'N/A')
-
-        # 4. Simpan hasil ke Database
-        # Hanya simpan jika ada wajah terdeteksi
+            fatigue_score = -1.0 
         if emotion != "no_face_detected" and emotion != "unknown":
             current_user_id = session['user_id']
-            
+
+            python_fatigue_score = float(fatigue_score)
+
             new_log = DetectionLog(
                 user_id=current_user_id,
                 emotion=emotion,
-                fatigue_score=fatigue_score
+                fatigue_score=python_fatigue_score 
             )
             db.session.add(new_log)
             db.session.commit()
-
-        # 5. Kembalikan hasil sebagai JSON
         return jsonify({
             "success": True,
             "emotion": emotion,
-            "fatigue_score": fatigue_score # 0.0 (bangun), 1.0 (lelah), -1.0 (N/A)
+            "fatigue_score": fatigue_score
         }), 200
-
     except Exception as e:
-        # Tangani error umum
         print(f"Server Error di /api/analyze_frame: {e}")
         return jsonify({"error": "Terjadi kesalahan di server", "details": str(e)}), 500
-
 @app.route('/api/logs', methods=['GET'])
 @require_login
 def api_get_logs():
-    """
-    Mengambil data log untuk ditampilkan di grafik.
-    Menerapkan RBAC:
-    - 'user' hanya melihat log miliknya.
-    - 'admin' melihat semua log (kita akan implementasi ini nanti).
-    """
     try:
         user_id = session['user_id']
         user_role = session['role']
-
-        # Logika RBAC
         if user_role == 'admin':
-            print("Mengambil log sebagai ADMIN") # Pesan debug
+            print("Mengambil log sebagai ADMIN")
             logs = DetectionLog.query.order_by(DetectionLog.timestamp.asc()).all()
         else:
-            print("Mengambil log sebagai USER") # Pesan debug
+            print("Mengambil log sebagai USER")
             logs = DetectionLog.query.filter_by(user_id=user_id).order_by(DetectionLog.timestamp.asc()).all()
-            
-        # Ubah data log menjadi format yang bisa dibaca JSON
         log_data = []
         for log in logs:
             log_data.append({
@@ -354,82 +289,47 @@ def api_get_logs():
                 "fatigue_score": log.fatigue_score,
                 "emotion": log.emotion
             })
-            
         return jsonify({
             "success": True,
             "logs": log_data,
             "role": user_role
         })
-
     except Exception as e:
         print(f"Server Error di /api/logs: {e}")
         return jsonify({"error": "Terjadi kesalahan di server", "details": str(e)}), 500
-    
 @app.route('/api/download_csv')
 @require_login
 def api_download_csv():
-    """
-    Membuat dan mengirimkan file CSV dari data log pengguna.
-    Menerapkan RBAC:
-    - 'user' hanya mengunduh log miliknya.
-    - 'admin' mengunduh SEMUA log.
-    """
     try:
         user_id = session['user_id']
         user_role = session['role']
-
-        # 1. Ambil data log sesuai RBAC (logika yang sama dengan /api/logs)
         if user_role == 'admin':
-            # Admin: Ambil SEMUA log
-            # Kita juga butuh info 'user' (NRP, Nama) untuk admin
             logs = db.session.query(DetectionLog, User).join(User, DetectionLog.user_id == User.id).order_by(DetectionLog.timestamp.asc()).all()
-            
-            # Tentukan header CSV untuk Admin
             csv_header = ['log_id', 'timestamp', 'user_id', 'user_nrp', 'user_nama', 'emotion', 'fatigue_score']
-            
         else:
-            # User: Ambil log milik sendiri
             logs = DetectionLog.query.filter_by(user_id=user_id).order_by(DetectionLog.timestamp.asc()).all()
-            
-            # Tentukan header CSV untuk User
             csv_header = ['log_id', 'timestamp', 'emotion', 'fatigue_score']
-
-        # 2. Buat file CSV dalam memori
+        
         si = io.StringIO()
         writer = csv.writer(si)
-        
-        # Tulis header
         writer.writerow(csv_header)
         
-        # 3. Tulis data log
         if user_role == 'admin':
             for log, user in logs:
                 writer.writerow([
-                    log.id,
-                    log.timestamp.isoformat(),
-                    log.user_id,
-                    user.nrp,
-                    user.nama,
-                    log.emotion,
-                    log.fatigue_score
+                    log.id, log.timestamp.isoformat(), log.user_id,
+                    user.nrp, user.nama, log.emotion, log.fatigue_score
                 ])
         else:
             for log in logs:
                 writer.writerow([
-                    log.id,
-                    log.timestamp.isoformat(),
-                    log.emotion,
-                    log.fatigue_score
+                    log.id, log.timestamp.isoformat(), log.emotion, log.fatigue_score
                 ])
-
-        # 4. Siapkan file untuk di-download
         output = make_response(si.getvalue())
         output.headers["Content-Disposition"] = "attachment; filename=detection_log.csv"
         output.headers["Content-type"] = "text/csv"
-        
-        si.close() # Tutup buffer memori
+        si.close()
         return output
-
     except Exception as e:
         print(f"Server Error di /api/download_csv: {e}")
         flash('Gagal membuat file CSV.', 'danger')
@@ -437,5 +337,4 @@ def api_download_csv():
 
 # 8. Menjalankan Aplikasi
 if __name__ == '__main__':
-    # 'debug=True' akan otomatis me-restart server setiap ada perubahan kode
     app.run(debug=True)

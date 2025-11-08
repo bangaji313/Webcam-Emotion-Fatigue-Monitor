@@ -10,3 +10,12 @@ __pycache__/
 
 # File spesifik OS
 .DS_Store
+
+# Folder dataset ML
+/ml-training/
+
+# File model Keras yang sudah dilatih
+*.h5
+
+# Mengabaikan cache Jupyter Notebook
+/.ipynb_checkpoints/
