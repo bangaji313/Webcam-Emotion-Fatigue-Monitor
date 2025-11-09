@@ -35,6 +35,41 @@ Proyek ini dikembangkan sebagai bagian dari mata kuliah **IFB-499 Informatika Te
 
 ---
 
+## 🏛️ Arsitektur Sistem
+
+Berikut adalah diagram alur kerja (workflow) yang memvisualisasikan arsitektur *full-stack* dari sistem ganda ini:
+
+![Diagram Arsitektur Sistem](static/img/Dual-Health-Analysis-System-Arsitektur-Diagram.jpg)
+
+### Penjelasan Alur Diagram
+
+Diagram ini dibagi menjadi empat zona utama yang saling berinteraksi:
+
+1.  **Zona Klien (Browser Pengguna):**
+    * Ini adalah *frontend* yang dilihat pengguna, dibangun menggunakan HTML, Bootstrap, dan JavaScript.
+    * Pengguna (User/Admin) memulai semua aksi dari sini, baik melalui **Form Login**, **Halaman Monitor Webcam**, atau **Halaman Prediktor Jantung**.
+    * Interaksi JavaScript (seperti `dashboard.js` dan `heart_predictor.js`) bertanggung jawab untuk mengirim data (via `fetch API`) ke *backend* dan menerima hasil `JSON` untuk ditampilkan di UI (misalnya di *Gauge Chart* atau *Line Chart*).
+
+2.  **Zona Backend (Server Flask - app.py):**
+    * Ini adalah "otak" aplikasi yang ditulis dengan Python (Flask).
+    * **Routes Autentikasi & Halaman:** Menangani permintaan `GET` untuk menampilkan halaman HTML dan `POST` dari form login.
+    * **Keamanan & Sesi (RBAC):** Menggunakan `Flask-Bcrypt` untuk *hashing password* dan `Flask-Session` untuk memvalidasi apakah pengguna sudah *login* (`@require_login`) dan apa perannya (`session['role']`).
+    * **API Endpoints:** Dua API utama (`/api/analyze_frame` dan `/api/predict_heart`) menerima data (`POST`), memprosesnya, dan mengembalikan hasil prediksi.
+
+3.  **Zona Engine AI / Model:**
+    * Ini adalah model Machine Learning yang dimuat oleh *backend* saat *startup*.
+    * **Engine Webcam (CV):** Menggunakan *library* `DeepFace` dan `OpenCV` (Haar Cascade) untuk menganalisis gambar *frame* webcam secara *real-time*.
+    * **Engine Jantung (Sklearn):** Memuat tiga *file* artefak (`heart_model.pkl`, `heart_scaler.pkl`, `heart_columns.json`) untuk melakukan *preprocessing* (scaling, one-hot encoding) dan prediksi pada data formulir.
+
+4.  **Zona Database (PostgreSQL):**
+    * Tempat penyimpanan data persisten (`webcam_health_db`).
+    * **Tabel `users`:** Menyimpan kredensial dan *role* (admin/user) untuk RBAC.
+    * **Tabel `detection_log`:** Menerima `INSERT` dari API *webcam* untuk setiap analisis emosi/kelelahan.
+    * **Tabel `heart_prediction_log`:** Menerima `INSERT` dari API *jantung* untuk setiap 13 input dan hasil prediksinya.
+    * Tabel-tabel ini juga di-`SELECT` (dan di-`JOIN` oleh admin) untuk menampilkan data historis.
+
+---
+
 ## 🛠️ Stack Teknologi (Tech Stack)
 
 * **Backend:** Python 3.10+, Flask, SQLAlchemy, Flask-Session, Flask-Bcrypt
